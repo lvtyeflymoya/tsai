@@ -177,3 +177,8 @@ token
 *.pkg
 new.*
 old.*
+
+
+# chuanzha
+models/
+trianResult/

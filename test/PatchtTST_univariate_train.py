@@ -1,6 +1,18 @@
 from tsai.basics import *
 import sklearn
 import logging
+import os 
+from pathlib import Path
+
+# 创建实验目录
+base_dir = Path("trainResult")
+existing_exps = [d.name for d in base_dir.glob("experiment*") if d.is_dir()]
+exp_numbers = [int(exp[10:]) for exp in existing_exps if exp[10:].isdigit()]
+next_exp = max(exp_numbers) + 1 if exp_numbers else 1
+
+exp_path = base_dir / f"experiment{next_exp}"
+(exp_path / "metrics").mkdir(parents=True, exist_ok=True)
+(exp_path / "model").mkdir(parents=True, exist_ok=True)
 
 # 配置日志记录
 logging.basicConfig(
@@ -12,15 +24,6 @@ logging.basicConfig(
         # logging.FileHandler('preprocessing.log')
     ]
 )
-
-# ts = get_forecasting_time_series("Sunspots").values
-# X, y = SlidingWindow(60, horizon=1)(ts)
-# splits = TimeSplitter(235)(y) 
-# tfms = [None, TSForecasting()]
-# batch_tfms = TSStandardize()
-# fcst = TSForecaster(X, y, splits=splits, path='models', tfms=tfms, batch_tfms=batch_tfms, bs=512, arch="TSTPlus", metrics=mae)
-# fcst.fit_one_cycle(5, 1e-3)
-# fcst.export("fcst.pkl")
 
 # 加载数据集
 dsid = "ETTh1"
@@ -56,7 +59,8 @@ fcst_horizon = 60  # steps in the future
 valid_size   = 0.1  # int or float indicating the size of the validation set
 test_size    = 0.2  # int or float indicating the size of the test set
 
-splits = get_long_term_forecasting_splits(df, fcst_history=fcst_history, fcst_horizon=fcst_horizon, dsid=dsid)
+splits = get_long_term_forecasting_splits(df, fcst_history=fcst_history, 
+                                          fcst_horizon=fcst_horizon, dsid=dsid, show_plot=False)
 # logging.info("分割后的数据内容：")
 # logging.info(splits)
 
@@ -95,7 +99,7 @@ arch_config = dict(
     stride=8,  # stride used when creating patches
     padding_patch=True,  # padding_patch
 )
-learn = TSForecaster(X, y, splits=splits, batch_size=16, path="models", pipelines=[preproc_pipe, exp_pipe],
+learn = TSForecaster(X, y, splits=splits, batch_size=16, path=str(exp_path), pipelines=[preproc_pipe, exp_pipe],
                      arch="PatchTST", arch_config=arch_config, metrics=[mse, mae])
 learn.dls.valid.drop_last = True
 logging.info(learn.summary())
@@ -105,4 +109,7 @@ n_epochs = 2
 lr_max = 0.0025
 learn.fit_one_cycle(n_epochs, lr_max=lr_max)
 learn.plot_metrics()
-learn.export('../models/patchTST.pt')
+# learn.export('../models/patchTST.pt')
+plt.savefig(str(exp_path / "metrics/training_metrics.png"))
+plt.close()
+learn.export("model/patchTST.pt")
