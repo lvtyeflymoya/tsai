@@ -7,6 +7,16 @@ import argparse
 from sklearn.metrics import mean_squared_error, mean_absolute_error
 
 
+# 解析命令行参数
+parser = argparse.ArgumentParser()
+parser.add_argument('--pretrained', type=str.lower, choices=['true', 'false'], default='false',
+                    help='是否加载预训练模型（true/false）')
+parser.add_argument('--pretrained_path', type=str, default='D:/Python_Project/tsai/trainResult/experiment11/model/PatchTST_best.pth',
+                    help='预训练模型路径')
+parser.add_argument('--dsid', type=str, default='ETTh1',help='数据集名称')
+args = parser.parse_args()
+
+
 # 创建实验目录
 base_dir = Path("trainResult")
 existing_exps = [d.name for d in base_dir.glob("experiment*") if d.is_dir()]
@@ -29,7 +39,7 @@ logging.basicConfig(
 )
 
 # 加载数据集
-dsid = "ETTh1"
+dsid = args.dsid
 df_raw = get_long_term_forecasting_data(dsid, target_dir="D:/Python_Project/toolscript", task='S')
 # print(df_raw)
 
@@ -63,7 +73,7 @@ valid_size   = 0.1  # int or float indicating the size of the validation set
 test_size    = 0.2  # int or float indicating the size of the test set
 
 splits = get_long_term_forecasting_splits(df, fcst_history=fcst_history, 
-                                          fcst_horizon=fcst_horizon, dsid=dsid, show_plot=True)
+                                          fcst_horizon=fcst_horizon, dsid=dsid, show_plot=False)
 # logging.info("分割后的数据内容：")
 # logging.info(splits)
 
@@ -110,25 +120,16 @@ logging.info(learn.summary())
 # 训练模型
 n_epochs = 10
 lr_max = 0.0025
-# 解析命令行参数
-parser = argparse.ArgumentParser()
-parser.add_argument('--pretrained', type=str.lower, choices=['true', 'false'], default='false',
-                    help='是否加载预训练模型（true/false）')
-parser.add_argument('--pretrained_path', type=str, default='D:/Python_Project/tsai/trainResult/experiment11/model/PatchTST_best.pth',
-                    help='预训练模型路径')
-args = parser.parse_args()
 
-weights_path = Path(args.pretrained_path)
+
 # 在训练开始前加载预训练模型
-if args.pretrained == 'false':
+if args.pretrained == 'true':
     if not Path(args.pretrained_path).exists():
         raise FileNotFoundError(f"预训练模型未找到：{args.pretrained_path}")
     learn = TSForecaster(X, y, splits=splits, batch_size=16, path=str(exp_path), pipelines=[preproc_pipe, exp_pipe],
                      arch="PatchTST", arch_config=arch_config, metrics=[mse, mae],
-                     pretrained=True, weights_path=weights_path)
-    # learn = TSForecaster(X, y, splits=splits, batch_size=16, path=str(exp_path), pipelines=[preproc_pipe, exp_pipe],
-    #                  arch="PatchTST", arch_config=arch_config, metrics=[mse, mae])
-    # learn.load(args.pretrained_path)
+                     pretrained=True, weights_path=args.pretrained_path)
+   
     logging.info(f"已加载预训练模型：{args.pretrained_path}")
     learn.freeze_to(-1)  # 冻结除最后一层外的所有层
 
@@ -141,6 +142,7 @@ val_interval = 2
 # 训练循环:每val_interval个epoch验证一次
 for epoch_start in range(0, n_epochs, val_interval):
 
+    logging.info(f"Starting training from epoch {epoch_start + 1} to {epoch_start + val_interval}")
     learn.fit_one_cycle(val_interval, lr_max=lr_max)
     
     # 验证集预测

@@ -71,9 +71,25 @@ results_df.loc["valid", "mae"] = mean_absolute_error(scaled_y_true.flatten(), sc
 print(results_df)
 '''
 
-
+# 准备预测器，可以理解为准备训练参数
+arch_config = dict(
+    n_layers=3,  # number of encoder layers
+    n_heads=4,  # number of heads
+    d_model=16,  # dimension of model
+    d_ff=128,  # dimension of fully connected network
+    attn_dropout=0.0, # dropout applied to the attention weights
+    dropout=0.3,  # dropout applied to all linear layers in the encoder except q,k&v projections
+    patch_len=16,  # length of the patch applied to the time series to create patches
+    stride=8,  # stride used when creating patches
+    padding_patch=True,  # padding_patch
+)
+weights_path = Path("D:/Python_Project/tsai/trainResult/experiment14/model/PatchTST_best.pth")
+learn = TSForecaster(X, y, splits=splits, batch_size=16, pipelines=[preproc_pipe, exp_pipe],
+                     arch="PatchTST", arch_config=arch_config, metrics=[mse, mae],
+                     pretrained=True, weights_path=weights_path)
+    
 '''测试集预测'''
-learn = load_learner('models/patchTST.pt')
+# learn = load_learner('models/patchTST.pt')
 y_test_preds, *_ = learn.get_X_preds(X[splits[2]])
 y_test_preds = to_np(y_test_preds)
 print(f"y_test_preds.shape: {y_test_preds.shape}")
