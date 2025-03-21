@@ -33,7 +33,8 @@ fcst_horizon = 60  # # steps in the future
 valid_size   = 0.1  # int or float indicating the size of the training set
 test_size    = 0.2  # int or float indicating the size of the test set
 
-splits = get_long_term_forecasting_splits(df, fcst_history=fcst_history, fcst_horizon=fcst_horizon, dsid=dsid)
+splits = get_long_term_forecasting_splits(df, fcst_history=fcst_history, 
+                                          fcst_horizon=fcst_horizon, dsid=dsid, show_plot=False)
 # print(splits)
 
 columns = df.columns[1:]

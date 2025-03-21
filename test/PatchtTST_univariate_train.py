@@ -3,6 +3,9 @@ import sklearn
 import logging
 import os 
 from pathlib import Path
+import argparse
+from sklearn.metrics import mean_squared_error, mean_absolute_error
+
 
 # 创建实验目录
 base_dir = Path("trainResult")
@@ -41,7 +44,7 @@ value = 0
 preproc_pipe = sklearn.pipeline.Pipeline([
     ('shrinker', TSShrinkDataFrame()), # shrink dataframe memory usage
     ('drop_duplicates', TSDropDuplicates(datetime_col=datetime_col)), # drop duplicate rows (if any)
-    ('add_mts', TSAddMissingTimestamps(datetime_col=datetime_col, freq=freq)), # ass missing timestamps (if any)
+    ('add_mts', TSAddMissingTimestamps(datetime_col=datetime_col, freq=freq)), # add missing timestamps (if any)
     ('fill_missing', TSFillMissing(columns=columns, method=method, value=value)), # fill missing data (1st ffill. 2nd value=0)
     ], 
     verbose=True)
@@ -54,13 +57,13 @@ df = preproc_pipe.fit_transform(df_raw)
 # logging.info(df)
 
 # 数据划分
-fcst_history = 104 # steps in the past
-fcst_horizon = 60  # steps in the future
+fcst_history = 240 # steps in the past
+fcst_horizon = 30  # steps in the future
 valid_size   = 0.1  # int or float indicating the size of the validation set
 test_size    = 0.2  # int or float indicating the size of the test set
 
 splits = get_long_term_forecasting_splits(df, fcst_history=fcst_history, 
-                                          fcst_horizon=fcst_horizon, dsid=dsid, show_plot=False)
+                                          fcst_horizon=fcst_horizon, dsid=dsid, show_plot=True)
 # logging.info("分割后的数据内容：")
 # logging.info(splits)
 
@@ -99,17 +102,69 @@ arch_config = dict(
     stride=8,  # stride used when creating patches
     padding_patch=True,  # padding_patch
 )
-learn = TSForecaster(X, y, splits=splits, batch_size=16, path=str(exp_path), pipelines=[preproc_pipe, exp_pipe],
+learn = TSForecaster(X, y, splits=splits, batch_size=1024, path=str(exp_path), pipelines=[preproc_pipe, exp_pipe],
                      arch="PatchTST", arch_config=arch_config, metrics=[mse, mae])
 learn.dls.valid.drop_last = True
 logging.info(learn.summary())
 
 # 训练模型
-n_epochs = 2
+n_epochs = 10
 lr_max = 0.0025
-learn.fit_one_cycle(n_epochs, lr_max=lr_max)
+# 解析命令行参数
+parser = argparse.ArgumentParser()
+parser.add_argument('--pretrained', type=str.lower, choices=['true', 'false'], default='false',
+                    help='是否加载预训练模型（true/false）')
+parser.add_argument('--pretrained_path', type=str, default='D:/Python_Project/tsai/trainResult/PatchTST_best.pth',
+                    help='预训练模型路径')
+args = parser.parse_args()
+
+# 在训练开始前加载预训练模型
+if args.pretrained == 'true':
+    if not Path(args.pretrained_path).exists():
+        raise FileNotFoundError(f"预训练模型未找到：{args.pretrained_path}")
+    learn = TSForecaster(X, y, splits=splits, batch_size=16, path=str(exp_path), pipelines=[preproc_pipe, exp_pipe],
+                     arch="PatchTST", arch_config=arch_config, metrics=[mse, mae],
+                     pretrained=True, weights_path=args.pretrained_path)
+    # learn = TSForecaster(X, y, splits=splits, batch_size=16, path=str(exp_path), pipelines=[preproc_pipe, exp_pipe],
+    #                  arch="PatchTST", arch_config=arch_config, metrics=[mse, mae])
+    # learn.load(args.pretrained_path)
+    logging.info(f"已加载预训练模型：{args.pretrained_path}")
+    learn.freeze_to(-1)  # 冻结除最后一层外的所有层
+
+# 在训练开始前初始化最佳指标
+best_mse = float('inf')
+best_mae = float('inf')
+results_df = pd.DataFrame(columns=["mse", "mae"])
+val_interval = 2
+
+# 训练循环:每val_interval个epoch验证一次
+for epoch_start in range(0, n_epochs, val_interval):
+
+    learn.fit_one_cycle(val_interval, lr_max=lr_max)
+    
+    # 验证集预测
+    scaled_preds, *_ = learn.get_X_preds(X[splits[1]])
+    scaled_preds = to_np(scaled_preds)
+    scaled_y_true = y[splits[1]]
+    
+    # 计算当前指标
+    current_mse = mean_squared_error(scaled_y_true.flatten(), scaled_preds.flatten())
+    current_mae = mean_absolute_error(scaled_y_true.flatten(), scaled_preds.flatten())
+    
+    # 记录结果
+    results_df.loc[f"epoch_{epoch_start + val_interval}"] = [current_mse, current_mae]
+    
+    # 保存最佳模型
+    if current_mse < best_mse and current_mae < best_mae:
+        best_mse = current_mse
+        best_mae = current_mae
+        learn.export("model/PatchTST_best.pth")
+        logging.info(f"Epoch {epoch_start + val_interval}: 模型已保存，当前最佳MSE: {best_mse:.4f}, 当前最佳MAE: {best_mae:.4f}")
+
+# 保存最终模型和验证结果
+learn.export("model/patchTST.pth")
+logging.info("训练完成，最终模型和验证结果已保存")
 learn.plot_metrics()
-# learn.export('../models/patchTST.pt')
+
 plt.savefig(str(exp_path / "metrics/training_metrics.png"))
 plt.close()
-learn.export("model/patchTST.pt")
