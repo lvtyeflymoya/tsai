@@ -181,7 +181,7 @@ old.*
 
 # chuanzha
 models/
-trianResult/
+/trianResult/
 
 todolist.md
 *.png

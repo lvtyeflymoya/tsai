@@ -114,17 +114,18 @@ lr_max = 0.0025
 parser = argparse.ArgumentParser()
 parser.add_argument('--pretrained', type=str.lower, choices=['true', 'false'], default='false',
                     help='是否加载预训练模型（true/false）')
-parser.add_argument('--pretrained_path', type=str, default='D:/Python_Project/tsai/trainResult/PatchTST_best.pth',
+parser.add_argument('--pretrained_path', type=str, default='D:/Python_Project/tsai/trainResult/experiment11/model/PatchTST_best.pth',
                     help='预训练模型路径')
 args = parser.parse_args()
 
+weights_path = Path(args.pretrained_path)
 # 在训练开始前加载预训练模型
-if args.pretrained == 'true':
+if args.pretrained == 'false':
     if not Path(args.pretrained_path).exists():
         raise FileNotFoundError(f"预训练模型未找到：{args.pretrained_path}")
     learn = TSForecaster(X, y, splits=splits, batch_size=16, path=str(exp_path), pipelines=[preproc_pipe, exp_pipe],
                      arch="PatchTST", arch_config=arch_config, metrics=[mse, mae],
-                     pretrained=True, weights_path=args.pretrained_path)
+                     pretrained=True, weights_path=weights_path)
     # learn = TSForecaster(X, y, splits=splits, batch_size=16, path=str(exp_path), pipelines=[preproc_pipe, exp_pipe],
     #                  arch="PatchTST", arch_config=arch_config, metrics=[mse, mae])
     # learn.load(args.pretrained_path)
@@ -158,11 +159,12 @@ for epoch_start in range(0, n_epochs, val_interval):
     if current_mse < best_mse and current_mae < best_mae:
         best_mse = current_mse
         best_mae = current_mae
-        learn.export("model/PatchTST_best.pth")
+        torch.save(learn.model.state_dict(), exp_path / "model/PatchTST_best.pth")
         logging.info(f"Epoch {epoch_start + val_interval}: 模型已保存，当前最佳MSE: {best_mse:.4f}, 当前最佳MAE: {best_mae:.4f}")
 
 # 保存最终模型和验证结果
-learn.export("model/patchTST.pth")
+
+torch.save(learn.model.state_dict(), exp_path / "model/patchTST.pth")
 logging.info("训练完成，最终模型和验证结果已保存")
 learn.plot_metrics()
 
