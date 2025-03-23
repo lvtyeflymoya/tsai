@@ -54,7 +54,7 @@ value = 0
 preproc_pipe = sklearn.pipeline.Pipeline([
     ('shrinker', TSShrinkDataFrame()), # shrink dataframe memory usage
     ('drop_duplicates', TSDropDuplicates(datetime_col=datetime_col)), # drop duplicate rows (if any)
-    ('add_mts', TSAddMissingTimestamps(datetime_col=datetime_col, freq=freq)), # add missing timestamps (if any)
+    # ('add_mts', TSAddMissingTimestamps(datetime_col=datetime_col, freq=freq)), # add missing timestamps (if any)
     ('fill_missing', TSFillMissing(columns=columns, method=method, value=value)), # fill missing data (1st ffill. 2nd value=0)
     ], 
     verbose=True)
@@ -118,7 +118,7 @@ learn.dls.valid.drop_last = True
 logging.info(learn.summary())
 
 # 训练模型
-n_epochs = 10
+n_epochs = 30
 lr_max = 0.0025
 
 
@@ -137,13 +137,33 @@ if args.pretrained == 'true':
 best_mse = float('inf')
 best_mae = float('inf')
 results_df = pd.DataFrame(columns=["mse", "mae"])
-val_interval = 2
+val_interval = 5
+metrics_history = []    # 创建指标历史记录
 
 # 训练循环:每val_interval个epoch验证一次
 for epoch_start in range(0, n_epochs, val_interval):
-
     logging.info(f"Starting training from epoch {epoch_start + 1} to {epoch_start + val_interval}")
+    
+    # 指标记录
+    before = len(learn.recorder.values)
     learn.fit_one_cycle(val_interval, lr_max=lr_max)
+    # 获取本周期指标
+    for i, record in enumerate(learn.recorder.values[before - 1:]):
+        # epoch = epoch_start + i + 1
+        epoch = (epoch_start // val_interval) * val_interval + i + 1
+    
+        train_loss = record[0]
+        valid_loss = record[1]
+        mse = record[2]
+        mae = record[3] if len(record) > 3 else 0
+        
+        metrics_history.append((
+            epoch, 
+            float(train_loss),  # 直接转换为float
+            float(valid_loss),
+            float(mse),
+            float(mae)
+        ))
     
     # 验证集预测
     scaled_preds, *_ = learn.get_X_preds(X[splits[1]])
@@ -167,8 +187,21 @@ for epoch_start in range(0, n_epochs, val_interval):
 # 保存最终模型和验证结果
 
 torch.save(learn.model.state_dict(), exp_path / "model/patchTST.pth")
-logging.info("训练完成，最终模型和验证结果已保存")
-learn.plot_metrics()
 
-plt.savefig(str(exp_path / "metrics/training_metrics.png"))
-plt.close()
+
+# 修改绘图部分：使用自定义指标历史
+if len(metrics_history) >= 2:
+    epochs = [m[0] for m in metrics_history]
+    plt.figure(figsize=(12, 6))
+    plt.plot(epochs, [m[1] for m in metrics_history], label='Train Loss')
+    plt.plot(epochs, [m[2] for m in metrics_history], label='Valid Loss')
+    plt.plot(epochs, [m[3] for m in metrics_history], label='MSE')
+    plt.plot(epochs, [m[4] for m in metrics_history], label='MAE')
+    plt.xlabel('Epoch')
+    plt.ylabel('Metric Value')
+    plt.legend()
+    plt.savefig(str(exp_path / "metrics/training_metrics.png"))
+    plt.close()
+else:
+    logging.warning("无法生成训练曲线图，数据点不足")
+logging.info("训练完成，最终模型和验证结果已保存")
