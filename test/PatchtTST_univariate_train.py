@@ -139,7 +139,7 @@ best_mae = float('inf')
 results_df = pd.DataFrame(columns=["mse", "mae"])
 val_interval = 5
 metrics_history = []    # 创建指标历史记录
-no_improve_epochs = 0  # 新增早停计数器
+no_improve_epochs = 0  # 早停计数器
 
 # 训练循环:每val_interval个epoch验证一次
 for epoch_start in range(0, n_epochs, val_interval):
@@ -166,29 +166,20 @@ for epoch_start in range(0, n_epochs, val_interval):
             float(mae)
         ))
     
-    # 验证集预测
-    scaled_preds, *_ = learn.get_X_preds(X[splits[1]])
-    scaled_preds = to_np(scaled_preds)
-    scaled_y_true = y[splits[1]]
-    
-    # 计算当前指标
-    current_mse = mean_squared_error(scaled_y_true.flatten(), scaled_preds.flatten())
-    current_mae = mean_absolute_error(scaled_y_true.flatten(), scaled_preds.flatten())
-    
     # 记录结果
-    results_df.loc[f"epoch_{epoch_start + val_interval}"] = [current_mse, current_mae]
+    results_df.loc[f"epoch_{epoch_start + val_interval}"] = [mse, mae]
     
     # 保存最佳模型
-    if current_mse < best_mse and current_mae < best_mae:
-        best_mse = current_mse
-        best_mae = current_mae
+    if mse < best_mse and mae < best_mae:
+        best_mse = mse
+        best_mae = mae
         torch.save(learn.model.state_dict(), exp_path / "model/PatchTST_best.pth")
         logging.info(f"Epoch {epoch_start + val_interval}: 模型已保存，当前最佳MSE: {best_mse:.4f}, 当前最佳MAE: {best_mae:.4f}")
         no_improve_epochs = 0  # 重置计数器
     else:
         no_improve_epochs += val_interval
         logging.info(f"当前连续未提升epoch数：{no_improve_epochs}")
-        if no_improve_epochs >= 10:
+        if no_improve_epochs >= 30:
             logging.info(f"指标连续未提升，触发早停机制")
             break
 
