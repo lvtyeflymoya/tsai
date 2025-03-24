@@ -40,7 +40,7 @@ logging.basicConfig(
 
 # 加载数据集
 dsid = args.dsid
-df_raw = get_long_term_forecasting_data(dsid, target_dir="D:/Python_Project/toolscript", task='S')
+df_raw = get_long_term_forecasting_data(dsid, target_dir="D:/Python_Project/toolscript/csvfile/down_inside", task='S')
 # print(df_raw)
 
 # 数据预处理
@@ -82,13 +82,13 @@ columns = df.columns[1:]
 train_split = splits[0]
 
 exp_pipe = sklearn.pipeline.Pipeline([
-    ('scaler', TSStandardScaler(columns=columns)), # standardize data using train_split
+    ('scaler', TSStandardScaler(columns=columns))   # standardize data using train_split
     ], 
     verbose=True)
 save_object(exp_pipe, 'data/exp_pipe.pkl')
 exp_pipe = load_object('data/exp_pipe.pkl')
 
-df_scaled = exp_pipe.fit_transform(df, scaler__idxs=train_split)
+df_scaled = exp_pipe.fit_transform(df, scaler__idxs=train_split)    # 确保只使用训练集进行标准化，之后将用于预测和验证集
 logging.info("标准化后的数据内容：")
 logging.info(df_scaled)
 
@@ -118,7 +118,7 @@ learn.dls.valid.drop_last = True
 logging.info(learn.summary())
 
 # 训练模型
-n_epochs = 30
+n_epochs = 300
 lr_max = 0.0025
 
 
@@ -139,6 +139,7 @@ best_mae = float('inf')
 results_df = pd.DataFrame(columns=["mse", "mae"])
 val_interval = 5
 metrics_history = []    # 创建指标历史记录
+no_improve_epochs = 0  # 新增早停计数器
 
 # 训练循环:每val_interval个epoch验证一次
 for epoch_start in range(0, n_epochs, val_interval):
@@ -183,6 +184,13 @@ for epoch_start in range(0, n_epochs, val_interval):
         best_mae = current_mae
         torch.save(learn.model.state_dict(), exp_path / "model/PatchTST_best.pth")
         logging.info(f"Epoch {epoch_start + val_interval}: 模型已保存，当前最佳MSE: {best_mse:.4f}, 当前最佳MAE: {best_mae:.4f}")
+        no_improve_epochs = 0  # 重置计数器
+    else:
+        no_improve_epochs += val_interval
+        logging.info(f"当前连续未提升epoch数：{no_improve_epochs}")
+        if no_improve_epochs >= 10:
+            logging.info(f"指标连续未提升，触发早停机制")
+            break
 
 # 保存最终模型和验证结果
 
