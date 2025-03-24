@@ -180,7 +180,7 @@ old.*
 
 
 # chuanzha
-models/
+/models/
 /trianResult/
 
 todolist.md

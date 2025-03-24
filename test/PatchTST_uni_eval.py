@@ -84,7 +84,7 @@ arch_config = dict(
     padding_patch=True,  # padding_patch
 )
 weights_path = Path("D:/Python_Project/tsai/trainResult/experiment14/model/PatchTST_best.pth")
-learn = TSForecaster(X, y, splits=splits, batch_size=16, pipelines=[preproc_pipe, exp_pipe],
+learn = TSForecaster(X, y, splits=splits, batch_size=1024, pipelines=[preproc_pipe, exp_pipe],
                      arch="PatchTST", arch_config=arch_config, metrics=[mse, mae],
                      pretrained=True, weights_path=weights_path)
     
@@ -101,4 +101,4 @@ results_df.loc["test", "mae"] = mean_absolute_error(y_test.flatten(), y_test_pre
 print(results_df)
 X_test = X[splits[2]]
 y_test = y[splits[2]]
-plot_forecast(X_test, y_test, y_test_preds, sel_vars=True)
+plot_forecast(X_test, y_test, y_test_preds, n_samples=5, sel_vars=True)
