@@ -67,8 +67,8 @@ df = preproc_pipe.fit_transform(df_raw)
 # logging.info(df)
 
 # 数据划分
-fcst_history = 240 # steps in the past
-fcst_horizon = 30  # steps in the future
+fcst_history = 104 # steps in the past
+fcst_horizon = 60  # steps in the future
 valid_size   = 0.1  # int or float indicating the size of the validation set
 test_size    = 0.2  # int or float indicating the size of the test set
 
@@ -118,7 +118,7 @@ learn.dls.valid.drop_last = True
 logging.info(learn.summary())
 
 # 训练模型
-n_epochs = 300
+n_epochs = 30
 lr_max = 0.0025
 
 
