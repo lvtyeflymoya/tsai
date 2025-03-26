@@ -40,8 +40,8 @@ preproc_pipe = load_object('data/preproc_pipe.pkl')
 df = preproc_pipe.fit_transform(df_raw)
 # print(df)
 
-fcst_history = 1200 # # steps in the past
-fcst_horizon = 120  # # steps in the future
+fcst_history = 600 # # steps in the past
+fcst_horizon = 60  # # steps in the future
 valid_size   = 0.1  # int or float indicating the size of the training set
 test_size    = 0.2  # int or float indicating the size of the test set
 
@@ -117,8 +117,8 @@ y_test_inv = exp_pipe.named_steps['scaler'].inverse_transform(y_test_df)
 y_test_inv = y_test_inv.to_numpy().reshape(y_test.shape)
 
 # 重构连续预测序列（按预测步长间隔取样）
-full_preds = y_test_preds_inv[::fcst_horizon].flatten()
-full_true = y_test_inv[::fcst_horizon].flatten()
+full_preds = y_test_preds_inv[fcst_history:, 0, 0].flatten()
+full_true = y_test_inv[:-fcst_history, 0, 0].flatten()
 
 # 生成从0开始递增的时间索引
 time_col = pd.RangeIndex(start=0, stop=len(full_true), step=1)
@@ -134,7 +134,7 @@ results_df.loc["test", "mae"] = mean_absolute_error(y_test.flatten(), y_test_pre
 print(results_df)
 X_test = X[splits[2]]
 y_test = y[splits[2]]
-plot_forecast(X_test, y_test, y_test_preds, n_samples=5, sel_vars=True)
+plot_forecast(X_test, y_test, y_test_preds, n_samples=1, sel_vars=True)
 
 # 绘制完整预测曲线
 plt.figure(figsize=(15, 5))
